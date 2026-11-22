@@ -1,0 +1,31 @@
+name: Build Cricket APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      - name: Create Project & Build APK
+        run: |
+          flutter create cricket_fast_live
+          cp main.dart cricket_fast_live/lib/main.dart
+          cd cricket_fast_live
+          flutter pub get
+          flutter build apk --release
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cricket-fast-live-apk
+          path: cricket_fast_live/build/app/outputs/flutter-apk/app-release.apk
