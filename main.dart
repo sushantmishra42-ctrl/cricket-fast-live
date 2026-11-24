@@ -4,15 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
-const String kRapidApiHost = 'cricket-live-line-advance.p.rapidapi.com';
-const String kRapidApiKey = 'ffd6c64576msh818c8b1946c397bp1ff264jsnf20b8376f8d7';
+const String kHost = 'cricket-live-line-advance.p.rapidapi.com';
+const String kKey = 'ffd6c64576msh818c8b1946c397bp1ff264jsnf20b8376f8d7';
+Map<String, String> get _hdr => {'x-rapidapi-host': kHost, 'x-rapidapi-key': kKey};
 
-Map<String, String> get _headers => {'x-rapidapi-host': kRapidApiHost, 'x-rapidapi-key': kRapidApiKey};
+void main() => runApp(const CricketApp());
 
-void main() => runApp(const CricketGuruApp());
-
-class CricketGuruApp extends StatelessWidget {
-  const CricketGuruApp({super.key});
+class CricketApp extends StatelessWidget {
+  const CricketApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -29,56 +28,62 @@ class CricketGuruApp extends StatelessWidget {
 }
 
 class RapidMatch {
-  final String matchId, title, shortTitle, subtitle, formatStr, competition, statusStr, statusNote, dateStartIst, venue;
-  final String teamA, teamALogo, teamAScore, teamB, teamBLogo, teamBScore;
-  final int statusCode, latestInning;
-
+  final String id, title, shortTitle, subtitle, fmt, comp, statusStr, note, date, venue;
+  final String tA, logoA, scA, tB, logoB, scB;
+  final int code, latestInn;
   RapidMatch({
-    required this.matchId, required this.title, required this.shortTitle, required this.subtitle,
-    required this.formatStr, required this.competition, required this.statusStr, required this.statusNote,
-    required this.dateStartIst, required this.venue, required this.teamA, required this.teamALogo,
-    required this.teamAScore, required this.teamB, required this.teamBLogo, required this.teamBScore,
-    required this.statusCode, this.latestInning = 1,
+    required this.id, required this.title, required this.shortTitle, required this.subtitle,
+    required this.fmt, required this.comp, required this.statusStr, required this.note,
+    required this.date, required this.venue, required this.tA, required this.logoA,
+    required this.scA, required this.tB, required this.logoB, required this.scB,
+    required this.code, this.latestInn = 1,
   });
 
   factory RapidMatch.fromJson(Map<String, dynamic> j) {
-    final comp = j['competition'] is Map ? j['competition'] as Map : {};
-    final ven = j['venue'] is Map ? j['venue'] as Map : {};
-    final ta = j['teama'] is Map ? j['teama'] as Map : {};
-    final tb = j['teamb'] is Map ? j['teamb'] as Map : {};
-
-    String scoreOf(Map t) {
-      final full = (t['scores_full'] ?? '').toString().trim();
-      if (full.isNotEmpty) return full;
-      final sc = (t['scores'] ?? '').toString().trim();
-      final ov = (t['overs'] ?? '').toString().trim();
-      return sc.isNotEmpty ? (ov.isNotEmpty ? '$sc ($ov)' : sc) : '-';
+    final c = j['competition'] is Map ? j['competition'] as Map : {};
+    final v = j['venue'] is Map ? j['venue'] as Map : {};
+    final a = j['teama'] is Map ? j['teama'] as Map : {};
+    final b = j['teamb'] is Map ? j['teamb'] as Map : {};
+    String sc(Map m) {
+      final f = (m['scores_full'] ?? '').toString().trim();
+      if (f.isNotEmpty) return f;
+      final r = (m['scores'] ?? '').toString().trim();
+      final o = (m['overs'] ?? '').toString().trim();
+      return r.isNotEmpty ? (o.isNotEmpty ? '$r ($o)' : r) : '-';
     }
-
-    final sA = scoreOf(ta), sB = scoreOf(tb);
-    final vStr = [(ven['name'] ?? '').toString(), (ven['location'] ?? '').toString()].where((s) => s.isNotEmpty).join(', ');
+    final sa = sc(a), sb = sc(b);
+    final vs = [(v['name'] ?? '').toString(), (v['location'] ?? '').toString()].where((s) => s.isNotEmpty).join(', ');
     return RapidMatch(
-      matchId: (j['match_id'] ?? '').toString(),
+      id: (j['match_id'] ?? '').toString(),
       title: (j['title'] ?? '').toString(),
       shortTitle: (j['short_title'] ?? j['title'] ?? '').toString(),
       subtitle: (j['subtitle'] ?? '').toString(),
-      formatStr: (j['format_str'] ?? 'T20').toString(),
-      competition: (comp['title'] ?? '').toString(),
+      fmt: (j['format_str'] ?? 'T20').toString(),
+      comp: (c['title'] ?? '').toString(),
       statusStr: (j['status_str'] ?? '').toString(),
-      statusNote: (j['status_note'] ?? '').toString(),
-      dateStartIst: (j['date_start_ist'] ?? j['date_start'] ?? '').toString(),
-      venue: vStr.isEmpty ? 'TBA' : vStr,
-      teamA: (ta['short_name'] ?? ta['name'] ?? 'Team A').toString(),
-      teamALogo: (ta['logo_url'] ?? '').toString(),
-      teamAScore: sA,
-      teamB: (tb['short_name'] ?? tb['name'] ?? 'Team B').toString(),
-      teamBLogo: (tb['logo_url'] ?? '').toString(),
-      teamBScore: sB,
-      statusCode: int.tryParse((j['status'] ?? '1').toString()) ?? 1,
-      latestInning: int.tryParse((j['latest_inning_number'] ?? '').toString()) ?? ((sA != '-' && sB != '-') ? 2 : 1),
+      note: (j['status_note'] ?? '').toString(),
+      date: (j['date_start_ist'] ?? j['date_start'] ?? '').toString(),
+      venue: vs.isEmpty ? 'TBA' : vs,
+      tA: (a['short_name'] ?? a['name'] ?? 'T1').toString(),
+      logoA: (a['logo_url'] ?? '').toString(),
+      scA: sa,
+      tB: (b['short_name'] ?? b['name'] ?? 'T2').toString(),
+      logoB: (b['logo_url'] ?? '').toString(),
+      scB: sb,
+      code: int.tryParse((j['status'] ?? '1').toString()) ?? 1,
+      latestInn: int.tryParse((j['latest_inning_number'] ?? '').toString()) ?? ((sa != '-' && sb != '-') ? 2 : 1),
     );
   }
 }
+
+Widget _logo(String url, String name, [double sz = 32]) {
+  final ab = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
+  final fb = CircleAvatar(radius: sz / 2, backgroundColor: const Color(0xFFE3F2FD), child: Text(ab, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black)));
+  if (!url.startsWith('http')) return fb;
+  return ClipOval(child: Image.network(url, width: sz, height: sz, fit: BoxFit.cover, errorBuilder: (_, __, ___) => fb));
+}
+
+BoxDecoration _cardDeco([double r = 12]) => BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(r), border: Border.all(color: const Color(0xFFE5E7EB)));
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -89,7 +94,7 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _nav = 0;
   bool _loading = false;
-  List<RapidMatch> _live = [], _upcoming = [], _finished = [];
+  List<RapidMatch> _live = [], _up = [], _done = [];
 
   @override
   void initState() {
@@ -97,10 +102,10 @@ class _MainShellState extends State<MainShell> {
     _loadAll();
   }
 
-  Future<List<RapidMatch>> _getMatches(int st) async {
-    final res = await http.get(Uri.https(kRapidApiHost, '/matches', {'status': '$st', 'per_paged': '12', 'paged': '1'}), headers: _headers).timeout(const Duration(seconds: 40));
-    if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
-    final b = jsonDecode(res.body);
+  Future<List<RapidMatch>> _get(int st) async {
+    final r = await http.get(Uri.https(kHost, '/matches', {'status': '$st', 'per_paged': '12', 'paged': '1'}), headers: _hdr).timeout(const Duration(seconds: 40));
+    if (r.statusCode != 200) throw Exception('${r.statusCode}');
+    final b = jsonDecode(r.body);
     if (b is Map && b['response'] is Map && b['response']['items'] is List) {
       return (b['response']['items'] as List).whereType<Map<String, dynamic>>().map(RapidMatch.fromJson).toList();
     }
@@ -109,23 +114,22 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _loadAll() async {
     if (mounted) setState(() => _loading = true);
-    try { final l = await _getMatches(3); if (mounted) setState(() { _live = l; _loading = false; }); } catch (_) { if (mounted) setState(() => _loading = false); }
-    try { final u = await _getMatches(1); if (mounted) setState(() => _upcoming = u); } catch (_) {}
-    try { final f = await _getMatches(2); if (mounted) setState(() => _finished = f); } catch (_) {}
+    try { final l = await _get(3); if (mounted) setState(() { _live = l; _loading = false; }); } catch (_) { if (mounted) setState(() => _loading = false); }
+    try { final u = await _get(1); if (mounted) setState(() => _up = u); } catch (_) {}
+    try { final d = await _get(2); if (mounted) setState(() => _done = d); } catch (_) {}
   }
 
-  List<RapidMatch> get _all => [..._live, ..._upcoming, ..._finished];
+  List<RapidMatch> get _all => [..._live, ..._up, ..._done];
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomeTab(live: _live, upcoming: _upcoming, finished: _finished, loading: _loading, onRefresh: _loadAll, allMatches: _all, onTabJump: (i) => setState(() => _nav = i)),
-      const FlicksTab(),
-      FixturesTab(live: _live, upcoming: _upcoming, finished: _finished, allMatches: _all),
-      SeriesTab(allMatches: _all),
-      MoreTab(onJump: (i) => setState(() => _nav = i)),
+      _HomeScreen(live: _live, up: _up, done: _done, all: _all, loading: _loading, onRefresh: _loadAll, onNav: (i) => setState(() => _nav = i)),
+      const _FlicksScreen(),
+      _FixturesScreen(all: _all),
+      _SeriesScreen(all: _all),
+      _MoreScreen(onNav: (i) => setState(() => _nav = i)),
     ];
-
     return Scaffold(
       body: pages[_nav],
       bottomNavigationBar: BottomNavigationBar(
@@ -149,25 +153,726 @@ class _MainShellState extends State<MainShell> {
   }
 }
 
-class _TeamLogo extends StatelessWidget {
-  final String url, name;
-  final double size;
-  const _TeamLogo({required this.url, required this.name, this.size = 34});
+class _HomeScreen extends StatefulWidget {
+  final List<RapidMatch> live, up, done, all;
+  final bool loading;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<int> onNav;
+  const _HomeScreen({required this.live, required this.up, required this.done, required this.all, required this.loading, required this.onRefresh, required this.onNav});
+  @override
+  State<_HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<_HomeScreen> {
+  int _tab = 0, _page = 0;
   @override
   Widget build(BuildContext context) {
-    final abbr = name.length >= 2 ? name.substring(0, 2).toUpperCase() : name.toUpperCase();
-    if (url.startsWith('http')) {
-      return ClipOval(
-        child: Image.network(url, width: size, height: size, fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => CircleAvatar(radius: size / 2, backgroundColor: const Color(0xFFE3F2FD), child: Text(abbr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black))),
+    final featured = [...widget.live, ...widget.up.take(4), ...widget.done.take(4)];
+    final shown = _tab == 0 ? featured : widget.live;
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: widget.onRefresh,
+        child: ListView(
+          padding: const EdgeInsets.only(bottom: 16),
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(14, 10, 10, 6),
+              child: Row(
+                children: [
+                  const Icon(Icons.sports_cricket, size: 22),
+                  const SizedBox(width: 8),
+                  const Text('Cricket Fast Live', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  IconButton(onPressed: widget.loading ? null : widget.onRefresh, icon: widget.loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh, size: 20)),
+                ],
+              ),
+            ),
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                children: [
+                  _topTab('Featured', _tab == 0, () => setState(() => _tab = 0)),
+                  const SizedBox(width: 18),
+                  _topTab('Live (${widget.live.length})', _tab == 1, () => setState(() => _tab = 1)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (shown.isEmpty)
+              Container(margin: const EdgeInsets.all(14), padding: const EdgeInsets.all(24), decoration: _cardDeco(), child: Center(child: Text(widget.loading ? 'Loading live matches...' : 'Koi match nahi mila. Pull to refresh.')))
+            else ...[
+              SizedBox(
+                height: 158,
+                child: PageView.builder(
+                  itemCount: shown.length,
+                  onPageChanged: (i) => setState(() => _page = i),
+                  itemBuilder: (_, i) {
+                    final m = shown[i];
+                    return GestureDetector(
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MatchDetailPage(match: m, allMatches: widget.all))),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: _cardDeco(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              Expanded(child: Text('${m.comp.isNotEmpty ? m.comp : m.title}${m.subtitle.isNotEmpty ? ", ${m.subtitle}" : ""}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+                              const Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+                            ]),
+                            Text(m.date, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                            const Spacer(),
+                            Row(
+                              children: [
+                                _logo(m.logoA, m.tA, 34),
+                                const SizedBox(width: 8),
+                                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(m.scA, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis), Text(m.tA, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))])),
+                                Text(m.code == 3 ? '• Live' : (m.code == 2 ? 'Finished' : 'Upcoming'), style: TextStyle(color: m.code == 3 ? Colors.red : const Color(0xFF00897B), fontWeight: FontWeight.bold, fontSize: 11)),
+                                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(m.scB, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis), Text(m.tB, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))])),
+                                const SizedBox(width: 8),
+                                _logo(m.logoB, m.tB, 34),
+                              ],
+                            ),
+                            const Spacer(),
+                            Row(children: [
+                              Expanded(child: Text(m.note.isNotEmpty ? m.note : m.venue, style: const TextStyle(color: Color(0xFFB45309), fontSize: 12, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
+                              const Icon(Icons.bar_chart, size: 16, color: Colors.black54),
+                            ]),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(shown.length.clamp(0, 8), (i) => Container(margin: const EdgeInsets.symmetric(horizontal: 3), width: i == _page % 8 ? 16 : 6, height: 6, decoration: BoxDecoration(color: i == _page % 8 ? const Color(0xFF312E81) : Colors.grey.shade300, borderRadius: BorderRadius.circular(4)))),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  _pill('• Live (${widget.live.length})', () => setState(() => _tab = 1), Colors.red),
+                  _pill('Fixtures', () => widget.onNav(2), Colors.black87),
+                  _pill('Series', () => widget.onNav(3), Colors.black87),
+                  _pill('Videos', () => widget.onNav(1), Colors.black87),
+                ],
+              ),
+            ),
+            const Padding(padding: EdgeInsets.fromLTRB(14, 16, 14, 8), child: Text('Top News & Rankings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: _cardDeco(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text('ODI Men\'s #1 Rankings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Batter: Shubman Gill', style: TextStyle(fontSize: 12)),
+                      Text('Bowler: Rashid Khan', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _topTab(String t, bool sel, VoidCallback onTap) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: sel ? Colors.black : Colors.transparent, width: 2))),
+          child: Text(t, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: sel ? Colors.black : Colors.grey)),
         ),
       );
+
+  Widget _pill(String t, VoidCallback onTap, Color c) => GestureDetector(
+        onTap: onTap,
+        child: Container(margin: const EdgeInsets.only(right: 8), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7), decoration: _cardDeco(20), child: Text(t, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c))),
+      );
+}
+
+class MatchDetailPage extends StatefulWidget {
+  final RapidMatch match;
+  final List<RapidMatch> allMatches;
+  const MatchDetailPage({super.key, required this.match, required this.allMatches});
+  @override
+  State<MatchDetailPage> createState() => _MatchDetailPageState();
+}
+
+class _MatchDetailPageState extends State<MatchDetailPage> {
+  bool _loading = false, _fetching = false, _auto2s = false, _voice = false, _innOpen = false;
+  Timer? _timer;
+  late RapidMatch _m;
+
+  String _crr = '-', _rrr = '-', _ballsRem = '-', _target = '-', _pship = '-', _lastWkt = '-', _toss = '-';
+  String _oddsTeam = '', _oddsB = '-', _oddsL = '-', _sessTitle = '10 Over Runs', _sessB = '-', _sessL = '-';
+  String _rxbR = '-', _rxbB = '-', _yetToBat = '';
+  int _overNo = 1, _runs = 0, _ballsBowled = 0;
+  List<String> _recent = [];
+  List<Map<String, dynamic>> _batters = [], _allInnBat = [], _bowlers = [], _comm = [], _innings = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _m = widget.match;
+    _calcFallback();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _toggleAuto() {
+    setState(() {
+      _auto2s = !_auto2s;
+      if (_auto2s) {
+        _timer = Timer.periodic(const Duration(seconds: 2), (_) => _load(fast: true));
+      } else {
+        _timer?.cancel();
+      }
+    });
+  }
+
+  String _prob(String raw) {
+    final v = double.tryParse(raw);
+    if (v == null) return raw;
+    return (v > 1.0 && v < 2.0) ? ((v - 1.0) * 100).round().toString() : raw;
+  }
+
+  void _calcFallback() {
+    final s = (_m.scB != '-' && _m.scA == '-') ? _m.scB : (_m.scA != '-' ? _m.scA : _m.scB);
+    final m = RegExp(r'(\d+)[/\-](\d+)\s*\((\d+(?:\.\d+)?)').firstMatch(s);
+    if (m != null) {
+      _runs = int.tryParse(m.group(1) ?? '') ?? 0;
+      final ps = (m.group(3) ?? '0').split('.');
+      final ov = int.tryParse(ps[0]) ?? 0;
+      final bl = ps.length > 1 ? (int.tryParse(ps[1]) ?? 0) : 0;
+      _ballsBowled = ov * 6 + bl;
+      _overNo = bl == 0 && ov > 0 ? ov : ov + 1;
+      final tot = ov + bl / 6.0;
+      if (tot > 0) _crr = (_runs / tot).toStringAsFixed(2);
+      final maxB = _m.fmt.toUpperCase().contains('ODI') ? 300 : 120;
+      _ballsRem = '${(maxB - _ballsBowled).clamp(0, maxB)}';
     }
-    return CircleAvatar(radius: size / 2, backgroundColor: const Color(0xFFE3F2FD), child: Text(abbr, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black)));
+    final om = RegExp(r'(\d+)\s*Over', caseSensitive: false).firstMatch(_sessTitle);
+    final tr = int.tryParse(_sessL.split('.').first);
+    if (om != null && tr != null) {
+      final sb = (int.tryParse(om.group(1) ?? '') ?? 0) * 6;
+      _rxbB = '${(sb - _ballsBowled).clamp(0, sb)}';
+      _rxbR = '${(tr - _runs).clamp(0, 999)}';
+    }
+  }
+
+  Future<void> _load({bool fast = false}) async {
+    if (_fetching) return;
+    _fetching = true;
+    if (!fast && mounted) setState(() => _loading = true);
+    int maxInn = _m.latestInn.clamp(1, 2);
+
+    try {
+      final ir = await http.get(Uri.https(kHost, '/matches/${_m.id}/info'), headers: _hdr).timeout(const Duration(seconds: 25));
+      if (ir.statusCode == 200) {
+        final b = jsonDecode(ir.body);
+        if (b is Map && b['response'] is Map) {
+          final r = b['response'] as Map;
+          _m = RapidMatch.fromJson(Map<String, dynamic>.from(r));
+          maxInn = _m.latestInn.clamp(1, 2);
+          if (r['toss'] is Map && (r['toss']['text'] ?? '').toString().isNotEmpty) _toss = r['toss']['text'].toString();
+          if (r['live_odds'] is Map && r['live_odds']['matchodds'] is Map) {
+            final mo = r['live_odds']['matchodds'] as Map;
+            final ta = mo['teama'] is Map ? mo['teama'] as Map : null;
+            final tb = mo['teamb'] is Map ? mo['teamb'] as Map : null;
+            if (ta != null && (ta['back'] ?? '').toString().isNotEmpty) {
+              _oddsTeam = _m.tA; _oddsB = _prob('${ta['back']}'); _oddsL = _prob('${ta['lay']}');
+            } else if (tb != null && (tb['back'] ?? '').toString().isNotEmpty) {
+              _oddsTeam = _m.tB; _oddsB = _prob('${tb['back']}'); _oddsL = _prob('${tb['lay']}');
+            }
+          }
+          if (r['session_odds'] is List && (r['session_odds'] as List).isNotEmpty && (r['session_odds'] as List).first is Map) {
+            final f = (r['session_odds'] as List).first as Map;
+            _sessTitle = (f['title'] ?? 'Session').toString();
+            _sessB = (f['back'] ?? f['yes'] ?? '-').toString();
+            _sessL = (f['lay'] ?? f['no'] ?? '-').toString();
+          }
+        }
+      }
+    } catch (_) {}
+
+    final listInn = <Map<String, dynamic>>[];
+    Map<String, dynamic>? lastInn;
+    Map? lastRes;
+    for (int n = (fast ? maxInn : 1); n <= maxInn; n++) {
+      try {
+        final cr = await http.get(Uri.https(kHost, '/matches/${_m.id}/innings/$n/commentary'), headers: _hdr).timeout(const Duration(seconds: 25));
+        if (cr.statusCode == 200) {
+          final b = jsonDecode(cr.body);
+          if (b is Map && b['response'] is Map && b['response']['inning'] is Map) {
+            final im = Map<String, dynamic>.from(b['response']['inning'] as Map);
+            listInn.add(im);
+            lastInn = im;
+            lastRes = b['response'] as Map;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (lastInn != null && lastRes != null) {
+      if (lastInn['equations'] is Map) {
+        final eq = lastInn['equations'] as Map;
+        if ((eq['runrate'] ?? '').toString().isNotEmpty) _crr = '${eq['runrate']}';
+        if ((eq['required_runrate'] ?? '').toString().isNotEmpty) _rrr = '${eq['required_runrate']}';
+        if (maxInn >= 2 && (eq['target'] ?? '0').toString() != '0') _target = '${eq['target']}';
+      }
+      if (lastInn['current_partnership'] is Map) _pship = '${lastInn['current_partnership']['runs'] ?? 0}(${lastInn['current_partnership']['balls'] ?? 0})';
+      if (lastInn['last_wicket'] is Map && (lastInn['last_wicket']['name'] ?? '').toString().isNotEmpty) {
+        _lastWkt = '${lastInn['last_wicket']['name']} ${lastInn['last_wicket']['runs'] ?? 0}(${lastInn['last_wicket']['balls'] ?? 0})';
+      }
+      final rs = (lastInn['recent_scores'] ?? '').toString().trim();
+      if (rs.isNotEmpty) _recent = rs.split(RegExp(r'[,|\s]+')).where((s) => s.isNotEmpty).take(6).toList();
+      if (lastInn['batsmen'] is List) {
+        _allInnBat = (lastInn['batsmen'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        final now = _allInnBat.where((b) { final h = (b['how_out'] ?? '').toString().toLowerCase(); return h.isEmpty || h == 'not out'; }).toList();
+        _batters = now.isNotEmpty ? now : _allInnBat.take(2).toList();
+      }
+      if (lastInn['bowlers'] is List) {
+        final ab = (lastInn['bowlers'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        final bn = ab.where((w) => w['bowling'] == true || w['bowling'] == 'true').toList();
+        _bowlers = bn.isNotEmpty ? bn : (ab.isNotEmpty ? [ab.last] : []);
+      }
+      if (lastInn['did_not_bat'] is List) {
+        _yetToBat = (lastInn['did_not_bat'] as List).whereType<Map>().map((e) => (e['name'] ?? '').toString()).where((s) => s.isNotEmpty).join(', ');
+      }
+      if (lastRes['commentaries'] is List) {
+        _comm = (lastRes['commentaries'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList().reversed.toList();
+      }
+    }
+
+    if (!fast && listInn.isNotEmpty) _innings = listInn;
+    _calcFallback();
+    _fetching = false;
+    if (mounted) setState(() => _loading = false);
+  }
+
+  void _openSwitcher() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => ListView(
+        padding: const EdgeInsets.all(12),
+        children: widget.allMatches.take(12).map((m) => ListTile(
+          leading: _logo(m.logoA, m.tA, 28),
+          title: Text(m.shortTitle, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          subtitle: Text('${m.scA} | ${m.scB}', style: const TextStyle(fontSize: 11)),
+          trailing: Text(m.code == 3 ? '• Live' : (m.code == 2 ? 'Finished' : 'Upcoming'), style: TextStyle(color: m.code == 3 ? Colors.red : Colors.grey, fontSize: 11)),
+          onTap: () { Navigator.pop(context); Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MatchDetailPage(match: m, allMatches: widget.allMatches))); },
+        )).toList(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 5,
+      initialIndex: 1,
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 48,
+          title: GestureDetector(
+            onTap: _openSwitcher,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [Text(_m.shortTitle, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)), const Icon(Icons.arrow_drop_down, size: 20)]),
+              if (_m.subtitle.isNotEmpty) Text(_m.subtitle, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: _toggleAuto, child: Text(_auto2s ? 'Auto 2s ON' : 'Auto 2s', style: TextStyle(color: _auto2s ? const Color(0xFFD81B60) : const Color(0xFF00897B), fontWeight: FontWeight.bold, fontSize: 12))),
+            IconButton(onPressed: _loading ? null : () => _load(), icon: _loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh, size: 20)),
+          ],
+          bottom: const TabBar(isScrollable: true, labelColor: Colors.black, unselectedLabelColor: Colors.grey, indicatorColor: Colors.black, labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13), tabs: [Tab(text: 'Info'), Tab(text: 'Live'), Tab(text: 'Commentary'), Tab(text: 'Scorecard'), Tab(text: 'History')]),
+        ),
+        body: TabBarView(children: [_infoTab(), _liveTab(), _commTab(), _scorecardTab(), _historyTab()]),
+      ),
+    );
+  }
+
+  Widget _infoTab() => ListView(padding: const EdgeInsets.all(10), children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: _cardDeco(),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+            Column(children: [_logo(_m.logoA, _m.tA, 40), const SizedBox(height: 6), Text(_m.tA, style: const TextStyle(fontWeight: FontWeight.bold))]),
+            const Icon(Icons.bolt, color: Colors.amber, size: 26),
+            Column(children: [_logo(_m.logoB, _m.tB, 40), const SizedBox(height: 6), Text(_m.tB, style: const TextStyle(fontWeight: FontWeight.bold))]),
+          ]),
+        ),
+        const SizedBox(height: 8),
+        _tile('Series', _m.comp.isEmpty ? _m.title : _m.comp),
+        _tile('Date & Time', _m.date),
+        _tile('Toss', _toss),
+        _tile('Venue', _m.venue),
+      ]);
+
+  Widget _liveTab() {
+    final topScore = _m.scB != '-' ? '${_m.tB} ${_m.scB}' : '${_m.tA} ${_m.scA}';
+    final innLabel = _m.scB != '-' ? '1st Innings - ${_m.tB}' : '1st Innings - ${_m.tA}';
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        Container(
+          height: 88, color: Colors.black, padding: const EdgeInsets.all(12),
+          child: Stack(children: [
+            Align(alignment: Alignment.topLeft, child: GestureDetector(onTap: () => setState(() => _voice = !_voice), child: Icon(_voice ? Icons.volume_up : Icons.volume_off, color: Colors.white, size: 18))),
+            Align(alignment: Alignment.topRight, child: Text(_m.code == 3 ? '• Live' : _m.statusStr, style: const TextStyle(color: Colors.redAccent, fontSize: 11, fontWeight: FontWeight.bold))),
+            Center(child: Text(topScore, style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+          ]),
+        ),
+        Container(
+          color: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Expanded(child: Text('${_m.tA}: ${_m.scA}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+            Expanded(child: Text('${_m.tB}: ${_m.scB}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00897B)))),
+          ]),
+        ),
+        if (_recent.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), decoration: _cardDeco(8),
+            child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [Text('Over $_overNo  ', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)), ..._recent.map(_ball)])),
+          ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.all(10), decoration: _cardDeco(8),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Run Rate: $_crr', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            if (_target != '-') Text('Target: $_target', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            Text('Balls Rem: $_ballsRem', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.all(10), decoration: _cardDeco(8),
+          child: Column(children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('Win Probability', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+              Row(children: [Text('${_oddsTeam.isEmpty ? _m.tA : _oddsTeam}: ', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)), _rate(_oddsB, true), const SizedBox(width: 4), _rate(_oddsL, false)]),
+            ]),
+            const Divider(height: 14, color: Color(0xFFEEEEEE)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(children: [
+                Text('$_sessTitle: ', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                _rate(_sessB, true), const SizedBox(width: 4), _rate(_sessL, false),
+                const SizedBox(width: 14),
+                const Text('R X B: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                _rate(_rxbR, true), const SizedBox(width: 4), _rate(_rxbB, false),
+              ]),
+            ),
+          ]),
+        ),
+        if (_batters.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.all(10), decoration: _cardDeco(8),
+            child: Column(children: [
+              const Row(children: [
+                Expanded(flex: 5, child: Text('Batter', style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(child: Text('R', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(child: Text('B', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(child: Text('4s', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(child: Text('6s', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(flex: 2, child: Text('SR', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+              ]),
+              const Divider(),
+              ..._batters.asMap().entries.map((e) {
+                final b = e.value;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(children: [
+                    Expanded(flex: 5, child: Row(children: [Flexible(child: Text('${b['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12), overflow: TextOverflow.ellipsis)), if (e.key == 0) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.sports_cricket, size: 13, color: Color(0xFFC58B2B)))])),
+                    Expanded(child: Text('${b['runs'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                    Expanded(child: Text('${b['balls_faced'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                    Expanded(child: Text('${b['fours'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                    Expanded(child: Text('${b['sixes'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                    Expanded(flex: 2, child: Text('${b['strike_rate'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 11))),
+                  ]),
+                );
+              }),
+              const Divider(),
+              FittedBox(fit: BoxFit.scaleDown, child: Row(children: [Text("P'ship: $_pship", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)), const SizedBox(width: 14), Text("L' Wkt: $_lastWkt", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600))])),
+            ]),
+          ),
+        if (_bowlers.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.all(10), decoration: _cardDeco(8),
+            child: Column(children: [
+              const Row(children: [
+                Expanded(flex: 5, child: Text('Bowler', style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(child: Text('O', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(child: Text('R', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(child: Text('W', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+                Expanded(flex: 2, child: Text('Eco', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))),
+              ]),
+              const Divider(),
+              ..._bowlers.map((w) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(children: [
+                      Expanded(flex: 5, child: Text('${w['name'] ?? '-'}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12), overflow: TextOverflow.ellipsis)),
+                      Expanded(child: Text('${w['overs'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                      Expanded(child: Text('${w['runs_conceded'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                      Expanded(child: Text('${w['wickets'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                      Expanded(flex: 2, child: Text('${w['econ'] ?? '0.0'}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))),
+                    ]),
+                  )),
+            ]),
+          ),
+        if (_yetToBat.isNotEmpty)
+          Container(margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.all(10), decoration: _cardDeco(8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Yet to bat', style: TextStyle(color: Colors.grey, fontSize: 11)), const SizedBox(height: 4), Text(_yetToBat, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))])),
+        Container(
+          margin: const EdgeInsets.fromLTRB(8, 10, 8, 0), decoration: _cardDeco(10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(padding: EdgeInsets.fromLTRB(12, 10, 12, 4), child: Text('Settings', style: TextStyle(color: Colors.grey, fontSize: 12))),
+            const Divider(height: 1),
+            _setRow(Icons.emoji_events_outlined, 'Series', () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_m.comp.isEmpty ? _m.title : _m.comp)))),
+            _setRow(Icons.bar_chart, 'Points Table', () => DefaultTabController.of(context).animateTo(3)),
+            _setRow(Icons.share, 'Share Score', () { Clipboard.setData(ClipboardData(text: '${_m.shortTitle}: ${_m.tA} ${_m.scA} vs ${_m.tB} ${_m.scB}')); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Score copied!'))); }),
+            _setRow(Icons.translate, _voice ? 'Voice: ON' : 'Voice: OFF', () => setState(() => _voice = !_voice)),
+          ]),
+        ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(8, 10, 8, 0), decoration: _cardDeco(10),
+          child: Column(children: [
+            ListTile(
+              dense: true,
+              leading: _logo(_m.scB != '-' ? _m.logoB : _m.logoA, _m.scB != '-' ? _m.tB : _m.tA, 24),
+              title: Text(innLabel, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              trailing: Icon(_innOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+              onTap: () => setState(() => _innOpen = !_innOpen),
+            ),
+            if (_innOpen) ..._allInnBat.map((b) => Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 6), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('${b['name'] ?? ''}', style: const TextStyle(fontSize: 12)), Text('${b['runs'] ?? 0} (${b['balls_faced'] ?? 0})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))]))),
+          ]),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          child: Column(children: const [
+            Icon(Icons.shield_outlined, color: Colors.grey, size: 28),
+            SizedBox(height: 6),
+            Text('Cricket Fast Live', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
+            SizedBox(height: 4),
+            Text('Cricket Fast Live does not promote or support real money gaming. Live scores are for information & analysis only.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _setRow(IconData ic, String t, VoidCallback onTap) => ListTile(dense: true, leading: Icon(ic, size: 18), title: Text(t, style: const TextStyle(fontSize: 13)), trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey), onTap: onTap);
+
+  Widget _commTab() => _comm.isEmpty
+      ? Center(child: Text(_loading ? 'Loading commentary...' : 'Commentary available nahi hai.', style: const TextStyle(color: Colors.grey)))
+      : ListView.builder(
+          padding: const EdgeInsets.all(10),
+          itemCount: _comm.length,
+          itemBuilder: (_, i) {
+            final c = _comm[i];
+            final txt = (c['commentary'] ?? c['text'] ?? '').toString();
+            if (txt.isEmpty) return const SizedBox.shrink();
+            return Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(10), decoration: _cardDeco(8), child: Text('${c['over'] ?? 0}.${c['ball'] ?? 0}  $txt', style: const TextStyle(fontSize: 13)));
+          },
+        );
+
+  Widget _scorecardTab() => _innings.isEmpty
+      ? Center(child: Text(_loading ? 'Loading scorecard...' : 'Scorecard available nahi hai.', style: const TextStyle(color: Colors.grey)))
+      : ListView.builder(
+          padding: const EdgeInsets.all(10),
+          itemCount: _innings.length,
+          itemBuilder: (_, idx) {
+            final inn = _innings[idx];
+            final bs = (inn['batsmen'] is List) ? List.from(inn['batsmen']) : [];
+            final bw = (inn['bowlers'] is List) ? List.from(inn['bowlers']) : [];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: _cardDeco(10),
+              child: ExpansionTile(
+                initiallyExpanded: idx == _innings.length - 1,
+                title: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${inn['name'] ?? 'Innings'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))), Text('${inn['scores_full'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00897B)))]),
+                childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                children: [
+                  ...bs.map((b) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${b['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12))), Text('${b['runs'] ?? 0} (${b['balls_faced'] ?? 0}) • SR ${b['strike_rate'] ?? 0}', style: const TextStyle(fontSize: 12))]),
+                          if ((b['how_out'] ?? '').toString().isNotEmpty) Text('${b['how_out']}', style: const TextStyle(fontSize: 10, color: Color(0xFFB45309))),
+                        ]),
+                      )),
+                  if (bw.isNotEmpty) const Divider(),
+                  ...bw.map((w) => Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${w['name'] ?? ''}', style: const TextStyle(fontSize: 12))), Text('${w['overs'] ?? 0} O • ${w['runs_conceded'] ?? 0} R • ${w['wickets'] ?? 0} W • ER ${w['econ'] ?? 0}', style: const TextStyle(fontSize: 11))]))),
+                ],
+              ),
+            );
+          },
+        );
+
+  Widget _historyTab() {
+    final bars = List.generate(10, (i) => (i + 1, (i * 3 + 4) % 14 + 2));
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: _cardDeco(),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Over by Over Runs Graph', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 140,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: bars.map((b) => Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  Text('${b.$2}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                  const SizedBox(height: 4),
+                  Container(width: 16, height: (b.$2 * 7).toDouble(), decoration: BoxDecoration(color: const Color(0xFF8D7B68), borderRadius: BorderRadius.circular(3))),
+                  const SizedBox(height: 4),
+                  Text('${b.$1}', style: const TextStyle(fontSize: 10)),
+                ])).toList(),
+              ),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _tile(String t, String v) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: _cardDeco(8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: const TextStyle(color: Colors.grey, fontSize: 11)), const SizedBox(height: 3), Text(v, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))]));
+
+  Widget _rate(String t, bool p) => Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3), decoration: BoxDecoration(color: p ? const Color(0xFFFDE8EC) : const Color(0xFFE0F5F2), borderRadius: BorderRadius.circular(4)), child: Text(t, style: TextStyle(color: p ? const Color(0xFFD81B60) : const Color(0xFF00897B), fontWeight: FontWeight.bold, fontSize: 12)));
+
+  Widget _ball(String l) {
+    Color bg = const Color(0xFFEFEFEF), fg = Colors.black;
+    if (l == '4') { bg = const Color(0xFF3E7CB1); fg = Colors.white; }
+    else if (l == '6') { bg = const Color(0xFF6B4FA2); fg = Colors.white; }
+    else if (l == '1' || l == '2' || l == '3') { bg = const Color(0xFF2E9F57); fg = Colors.white; }
+    else if (l.toUpperCase() == 'W') { bg = Colors.redAccent; fg = Colors.white; }
+    return Container(margin: const EdgeInsets.only(right: 4), width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(color: bg, shape: BoxShape.circle), child: Text(l, style: TextStyle(color: fg, fontWeight: FontWeight.bold, fontSize: 10)));
   }
 }
 
-class HomeTab extends StatefulWidget {
-  final List<RapidMatch> live, upcoming, finished, allMatches;
-  final bool loading;
-  final Future<void> Function() onRefresh;
+class _FixturesScreen extends StatefulWidget {
+  final List<RapidMatch> all;
+  const _FixturesScreen({required this.all});
+  @override
+  State<_FixturesScreen> createState() => _FixturesScreenState();
+}
+
+class _FixturesScreenState extends State<_FixturesScreen> {
+  String _fmt = 'All', _q = '';
+  @override
+  Widget build(BuildContext context) {
+    final list = widget.all.where((m) => (_fmt == 'All' || m.fmt.toUpperCase().contains(_fmt.toUpperCase())) && (_q.isEmpty || m.title.toLowerCase().contains(_q.toLowerCase()))).toList();
+    return SafeArea(
+      child: DefaultTabController(
+        length: 3,
+        child: Column(children: [
+          Container(color: Colors.white, child: const TabBar(labelColor: Colors.black, unselectedLabelColor: Colors.grey, indicatorColor: Colors.black, tabs: [Tab(text: 'Day wise'), Tab(text: 'Series wise'), Tab(text: 'Team wise')])),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(children: ['All', 'T20', 'ODI', 'Test'].map((f) => Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ChoiceChip(label: Text(f, style: const TextStyle(fontSize: 12)), selected: _fmt == f, onSelected: (_) => setState(() => _fmt = f)),
+            )).toList()),
+          ),
+          Expanded(
+            child: TabBarView(children: [
+              ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                itemCount: list.length,
+                itemBuilder: (_, i) {
+                  final m = list[i];
+                  return GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MatchDetailPage(match: m, allMatches: widget.all))),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: _cardDeco(),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(m.comp.isEmpty ? m.title : m.comp, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.ellipsis)), Text(m.code == 3 ? 'Live' : (m.code == 2 ? 'Finished' : 'Upcoming'), style: TextStyle(fontSize: 11, color: m.code == 3 ? Colors.red : const Color(0xFF00897B), fontWeight: FontWeight.bold))]),
+                        const SizedBox(height: 8),
+                        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('${m.tA}  ${m.scA}', style: const TextStyle(fontWeight: FontWeight.bold)), const Icon(Icons.bolt, size: 16, color: Colors.grey), Text('${m.scB}  ${m.tB}', style: const TextStyle(fontWeight: FontWeight.bold))]),
+                        if (m.note.isNotEmpty) ...[const SizedBox(height: 6), Text(m.note, style: const TextStyle(fontSize: 11, color: Color(0xFFB45309)))],
+                      ]),
+                    ),
+                  );
+                },
+              ),
+              _SeriesScreen(all: widget.all),
+              Column(children: [
+                Padding(padding: const EdgeInsets.all(10), child: TextField(decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: 'Search team', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)), onChanged: (v) => setState(() => _q = v))),
+                Expanded(child: ListView(children: list.map((m) => ListTile(leading: _logo(m.logoA, m.tA, 28), title: Text(m.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MatchDetailPage(match: m, allMatches: widget.all))))).toList())),
+              ]),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _SeriesScreen extends StatelessWidget {
+  final List<RapidMatch> all;
+  const _SeriesScreen({required this.all});
+  @override
+  Widget build(BuildContext context) {
+    final names = all.map((m) => m.comp).where((s) => s.isNotEmpty).toSet().toList();
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          const Text('Trending & Ongoing Series', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          ...names.map((s) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: _cardDeco(), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(s, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))), const Text('Ongoing', style: TextStyle(color: Color(0xFFD81B60), fontSize: 11, fontWeight: FontWeight.bold))]))),
+        ],
+      ),
+    );
+  }
+}
+
+class _FlicksScreen extends StatelessWidget {
+  const _FlicksScreen();
+  @override
+  Widget build(BuildContext context) => SafeArea(child: ListView(padding: const EdgeInsets.all(12), children: [
+    const Text('Match Insights & Videos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+    const SizedBox(height: 10),
+    Container(padding: const EdgeInsets.all(14), decoration: _cardDeco(), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Match Predictions, Pitch Reports & Playing 11', style: TextStyle(fontWeight: FontWeight.bold)), SizedBox(height: 4), Text('Upcoming & Live T20 Leagues analysis', style: TextStyle(color: Colors.grey, fontSize: 12))])),
+  ]));
+}
+
+class _MoreScreen extends StatelessWidget {
+  final ValueChanged<int> onNav;
+  const _MoreScreen({required this.onNav});
+  @override
+  Widget build(BuildContext context) => SafeArea(child: ListView(padding: const EdgeInsets.all(12), children: [
+    const Text('More', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+    const SizedBox(height: 10),
+    Container(decoration: _cardDeco(), child: Column(children: [
+      ListTile(leading: const Icon(Icons.emoji_events_outlined), title: const Text('Browse Series'), trailing: const Icon(Icons.chevron_right), onTap: () => onNav(3)),
+      ListTile(leading: const Icon(Icons.sports_cricket), title: const Text('Browse Fixtures'), trailing: const Icon(Icons.chevron_right), onTap: () => onNav(2)),
+      const ListTile(leading: Icon(Icons.privacy_tip_outlined), title: Text('Privacy Policy'), trailing: Icon(Icons.chevron_right)),
+      const ListTile(leading: Icon(Icons.info_outline), title: Text('App Version 1.0'), trailing: Text('Live API')),
+    ])),
+  ]));
+}
