@@ -96,8 +96,10 @@ class RapidMatch {
     final vName = (ven['name'] ?? '').toString();
     final vLoc = (ven['location'] ?? '').toString();
     final venueStr = [vName, vLoc].where((s) => s.isNotEmpty).join(', ');
+    final sA = scoreOf(ta);
     final sB = scoreOf(tb);
     final parsedLatest = int.tryParse((j['latest_inning_number'] ?? '').toString());
+    final bothPlayed = (sA != '-' && sB != '-');
 
     return RapidMatch(
       matchId: (j['match_id'] ?? '').toString(),
@@ -111,11 +113,11 @@ class RapidMatch {
       dateStartIst: (j['date_start_ist'] ?? j['date_start'] ?? '').toString(),
       venue: venueStr.isEmpty ? 'TBA' : venueStr,
       teamA: (ta['short_name'] ?? ta['name'] ?? 'Team A').toString(),
-      teamAScore: scoreOf(ta),
+      teamAScore: sA,
       teamB: (tb['short_name'] ?? tb['name'] ?? 'Team B').toString(),
       teamBScore: sB,
       statusCode: int.tryParse((j['status'] ?? '1').toString()) ?? 1,
-      latestInning: parsedLatest ?? (sB != '-' ? 2 : 1),
+      latestInning: parsedLatest ?? (bothPlayed ? 2 : 1),
     );
   }
 }
@@ -453,6 +455,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
   void initState() {
     super.initState();
     _m = widget.match;
+    _applyScoreFallback();
     _loadAllDetails();
   }
 
@@ -473,11 +476,33 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
     });
   }
 
+  void _applyScoreFallback() {
+    final activeScore = (_m.teamBScore != '-' && _m.teamAScore == '-')
+        ? _m.teamBScore
+        : (_m.teamAScore != '-' ? _m.teamAScore : _m.teamBScore);
+    final m = RegExp(r'(\d+)[/\-](\d+)\s*\((\d+(?:\.\d+)?)').firstMatch(activeScore);
+    if (m != null) {
+      final runs = int.tryParse(m.group(1) ?? '');
+      final ovStr = m.group(3) ?? '';
+      if (runs != null && ovStr.isNotEmpty) {
+        final parts = ovStr.split('.');
+        final ov = int.tryParse(parts[0]) ?? 0;
+        final balls = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+        final totalOv = ov + (balls / 6.0);
+        if (totalOv > 0 && _crr == '-') {
+          _crr = (runs / totalOv).toStringAsFixed(2);
+        }
+        if ((_m.teamAScore == '-' || _m.teamBScore == '-') && _target == '-') {
+          _target = '${runs + 1}';
+        }
+      }
+    }
+  }
+
   Future<void> _loadAllDetails() async {
     setState(() => _loading = true);
-    int activeInning = _m.latestInning;
+    int maxInn = _m.latestInning.clamp(1, 2);
 
-    // 1. Match Info (/matches/{id}/info)
     try {
       final infoUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/info');
       final infoRes = await http.get(infoUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
@@ -486,7 +511,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
         if (body is Map && body['response'] is Map) {
           final r = body['response'] as Map;
           _m = RapidMatch.fromJson(Map<String, dynamic>.from(r));
-          activeInning = _m.latestInning;
+          maxInn = _m.latestInning.clamp(1, 2);
           if (r['toss'] is Map && (r['toss']['text'] ?? '').toString().isNotEmpty) {
             _toss = r['toss']['text'].toString();
           }
@@ -516,9 +541,11 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
       }
     } catch (_) {}
 
-    // 2. Active Inning Commentary & Live Stats (/matches/{id}/innings/{n}/commentary)
     final List<Map<String, dynamic>> inningsList = [];
-    for (int innNum = 1; innNum <= activeInning.clamp(1, 4); innNum++) {
+    Map<String, dynamic>? latestValidInning;
+    Map? latestValidResponse;
+
+    for (int innNum = 1; innNum <= maxInn; innNum++) {
       try {
         final commUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/innings/$innNum/commentary');
         final commRes = await http.get(commUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
@@ -529,18 +556,21 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
             if (r['inning'] is Map) {
               final innMap = Map<String, dynamic>.from(r['inning'] as Map);
               inningsList.add(innMap);
-              if (innNum == activeInning) {
-                _parseActiveInning(innMap, r);
-              }
+              latestValidInning = innMap;
+              latestValidResponse = r;
             }
           }
         }
       } catch (_) {}
     }
 
+    if (latestValidInning != null && latestValidResponse != null) {
+      _parseActiveInning(latestValidInning, latestValidResponse);
+    }
     if (inningsList.isNotEmpty) {
       _scorecardInnings = inningsList;
     }
+    _applyScoreFallback();
     if (mounted) setState(() => _loading = false);
   }
 
@@ -553,19 +583,6 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
       if (rr.isNotEmpty) _crr = rr;
       if (rrr.isNotEmpty) _rrr = rrr;
       if (tgt.isNotEmpty && tgt != '0') _target = tgt;
-    }
-
-    // Fallback CRR calculation if equations missing
-    if (_crr == '-') {
-      final eqRuns = double.tryParse((inn['equations'] is Map ? inn['equations']['runs'] : null)?.toString() ?? '');
-      final eqOv = (inn['equations'] is Map ? inn['equations']['overs'] : null)?.toString() ?? '';
-      if (eqRuns != null && eqOv.isNotEmpty) {
-        final parts = eqOv.split('.');
-        final ov = int.tryParse(parts[0]) ?? 0;
-        final b = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
-        final totalOv = ov + (b / 6.0);
-        if (totalOv > 0) _crr = (eqRuns / totalOv).toStringAsFixed(2);
-      }
     }
 
     if (inn['current_partnership'] is Map) {
