@@ -57,6 +57,7 @@ class RapidMatch {
   final String teamB;
   final String teamBScore;
   final int statusCode;
+  final int latestInning;
 
   RapidMatch({
     required this.matchId,
@@ -74,6 +75,7 @@ class RapidMatch {
     required this.teamB,
     required this.teamBScore,
     required this.statusCode,
+    this.latestInning = 1,
   });
 
   factory RapidMatch.fromJson(Map<String, dynamic> j) {
@@ -94,6 +96,8 @@ class RapidMatch {
     final vName = (ven['name'] ?? '').toString();
     final vLoc = (ven['location'] ?? '').toString();
     final venueStr = [vName, vLoc].where((s) => s.isNotEmpty).join(', ');
+    final sB = scoreOf(tb);
+    final parsedLatest = int.tryParse((j['latest_inning_number'] ?? '').toString());
 
     return RapidMatch(
       matchId: (j['match_id'] ?? '').toString(),
@@ -109,8 +113,9 @@ class RapidMatch {
       teamA: (ta['short_name'] ?? ta['name'] ?? 'Team A').toString(),
       teamAScore: scoreOf(ta),
       teamB: (tb['short_name'] ?? tb['name'] ?? 'Team B').toString(),
-      teamBScore: scoreOf(tb),
+      teamBScore: sB,
       statusCode: int.tryParse((j['status'] ?? '1').toString()) ?? 1,
+      latestInning: parsedLatest ?? (sB != '-' ? 2 : 1),
     );
   }
 }
@@ -448,7 +453,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
   void initState() {
     super.initState();
     _m = widget.match;
-    _loadLiveAndScorecard();
+    _loadAllDetails();
   }
 
   @override
@@ -461,118 +466,142 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
     setState(() {
       _autoLive = !_autoLive;
       if (_autoLive) {
-        _timer = Timer.periodic(const Duration(seconds: 15), (_) => _loadLiveAndScorecard());
+        _timer = Timer.periodic(const Duration(seconds: 15), (_) => _loadAllDetails());
       } else {
         _timer?.cancel();
       }
     });
   }
 
-  Future<void> _loadLiveAndScorecard() async {
+  Future<void> _loadAllDetails() async {
     setState(() => _loading = true);
-    try {
-      final liveUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/live');
-      final liveRes = await http.get(liveUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
-      if (liveRes.statusCode == 200) {
-        final body = jsonDecode(liveRes.body);
-        if (body is Map && body['response'] is Map) {
-          _parseLiveResponse(body['response'] as Map);
-        }
-      }
+    int activeInning = _m.latestInning;
 
-      final scUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/scorecard');
-      final scRes = await http.get(scUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
-      if (scRes.statusCode == 200) {
-        final body = jsonDecode(scRes.body);
+    // 1. Match Info (/matches/{id}/info)
+    try {
+      final infoUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/info');
+      final infoRes = await http.get(infoUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
+      if (infoRes.statusCode == 200) {
+        final body = jsonDecode(infoRes.body);
         if (body is Map && body['response'] is Map) {
           final r = body['response'] as Map;
+          _m = RapidMatch.fromJson(Map<String, dynamic>.from(r));
+          activeInning = _m.latestInning;
           if (r['toss'] is Map && (r['toss']['text'] ?? '').toString().isNotEmpty) {
             _toss = r['toss']['text'].toString();
           }
-          if (r['innings'] is List) {
-            _scorecardInnings = (r['innings'] as List).whereType<Map<String, dynamic>>().toList();
+          if (r['live_odds'] is Map && r['live_odds']['matchodds'] is Map) {
+            final mo = r['live_odds']['matchodds'] as Map;
+            final ta = mo['teama'] is Map ? mo['teama'] as Map : null;
+            final tb = mo['teamb'] is Map ? mo['teamb'] as Map : null;
+            if (ta != null && (ta['back'] ?? '').toString().isNotEmpty) {
+              _oddsTeam = _m.teamA;
+              _oddsBack = (ta['back'] ?? '-').toString();
+              _oddsLay = (ta['lay'] ?? '-').toString();
+            } else if (tb != null && (tb['back'] ?? '').toString().isNotEmpty) {
+              _oddsTeam = _m.teamB;
+              _oddsBack = (tb['back'] ?? '-').toString();
+              _oddsLay = (tb['lay'] ?? '-').toString();
+            }
+          }
+          if (r['session_odds'] is List && (r['session_odds'] as List).isNotEmpty) {
+            final first = (r['session_odds'] as List).first;
+            if (first is Map) {
+              _sessionTitle = (first['title'] ?? 'Session').toString();
+              _sessionBack = (first['back'] ?? first['yes'] ?? '-').toString();
+              _sessionLay = (first['lay'] ?? first['no'] ?? '-').toString();
+            }
           }
         }
       }
     } catch (_) {}
+
+    // 2. Active Inning Commentary & Live Stats (/matches/{id}/innings/{n}/commentary)
+    final List<Map<String, dynamic>> inningsList = [];
+    for (int innNum = 1; innNum <= activeInning.clamp(1, 4); innNum++) {
+      try {
+        final commUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/innings/$innNum/commentary');
+        final commRes = await http.get(commUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
+        if (commRes.statusCode == 200) {
+          final body = jsonDecode(commRes.body);
+          if (body is Map && body['response'] is Map) {
+            final r = body['response'] as Map;
+            if (r['inning'] is Map) {
+              final innMap = Map<String, dynamic>.from(r['inning'] as Map);
+              inningsList.add(innMap);
+              if (innNum == activeInning) {
+                _parseActiveInning(innMap, r);
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (inningsList.isNotEmpty) {
+      _scorecardInnings = inningsList;
+    }
     if (mounted) setState(() => _loading = false);
   }
 
-  void _parseLiveResponse(Map r) {
-    if (r['teama'] is Map || r['teamb'] is Map) {
-      _m = RapidMatch(
-        matchId: _m.matchId,
-        title: (r['title'] ?? _m.title).toString(),
-        shortTitle: _m.shortTitle,
-        subtitle: _m.subtitle,
-        formatStr: _m.formatStr,
-        competition: _m.competition,
-        statusStr: (r['status_str'] ?? _m.statusStr).toString(),
-        statusNote: (r['status_note'] ?? _m.statusNote).toString(),
-        dateStartIst: _m.dateStartIst,
-        venue: _m.venue,
-        teamA: (r['teama'] is Map ? (r['teama']['short_name'] ?? _m.teamA) : _m.teamA).toString(),
-        teamAScore: (r['teama'] is Map ? (r['teama']['scores_full'] ?? _m.teamAScore) : _m.teamAScore).toString(),
-        teamB: (r['teamb'] is Map ? (r['teamb']['short_name'] ?? _m.teamB) : _m.teamB).toString(),
-        teamBScore: (r['teamb'] is Map ? (r['teamb']['scores_full'] ?? _m.teamBScore) : _m.teamBScore).toString(),
-        statusCode: _m.statusCode,
-      );
+  void _parseActiveInning(Map<String, dynamic> inn, Map r) {
+    if (inn['equations'] is Map) {
+      final eq = inn['equations'] as Map;
+      final rr = (eq['runrate'] ?? '').toString().trim();
+      final rrr = (eq['required_runrate'] ?? '').toString().trim();
+      final tgt = (eq['target'] ?? '').toString().trim();
+      if (rr.isNotEmpty) _crr = rr;
+      if (rrr.isNotEmpty) _rrr = rrr;
+      if (tgt.isNotEmpty && tgt != '0') _target = tgt;
     }
 
-    if (r['batsmen'] is List) {
-      _batters = (r['batsmen'] as List).whereType<Map<String, dynamic>>().toList();
+    // Fallback CRR calculation if equations missing
+    if (_crr == '-') {
+      final eqRuns = double.tryParse((inn['equations'] is Map ? inn['equations']['runs'] : null)?.toString() ?? '');
+      final eqOv = (inn['equations'] is Map ? inn['equations']['overs'] : null)?.toString() ?? '';
+      if (eqRuns != null && eqOv.isNotEmpty) {
+        final parts = eqOv.split('.');
+        final ov = int.tryParse(parts[0]) ?? 0;
+        final b = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+        final totalOv = ov + (b / 6.0);
+        if (totalOv > 0) _crr = (eqRuns / totalOv).toStringAsFixed(2);
+      }
     }
-    if (r['bowlers'] is List) {
-      _bowlers = (r['bowlers'] as List).whereType<Map<String, dynamic>>().toList();
+
+    if (inn['current_partnership'] is Map) {
+      final cp = inn['current_partnership'] as Map;
+      _pship = '${cp['runs'] ?? 0}(${cp['balls'] ?? 0})';
     }
+    if (inn['last_wicket'] is Map) {
+      final lw = inn['last_wicket'] as Map;
+      final n = (lw['name'] ?? '').toString();
+      if (n.isNotEmpty) {
+        _lastWkt = '$n ${lw['runs'] ?? 0}(${lw['balls'] ?? 0})';
+      }
+    }
+    final rs = (inn['recent_scores'] ?? '').toString().trim();
+    if (rs.isNotEmpty) {
+      _recentBalls = rs.split(RegExp(r'[,|\s]+')).where((s) => s.isNotEmpty).take(12).toList();
+    }
+
+    if (inn['batsmen'] is List) {
+      final allBats = (inn['batsmen'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      final battingNow = allBats.where((b) {
+        final how = (b['how_out'] ?? '').toString().toLowerCase();
+        return how.isEmpty || how == 'not out';
+      }).toList();
+      _batters = battingNow.isNotEmpty ? battingNow : allBats.take(2).toList();
+    }
+
+    if (inn['bowlers'] is List) {
+      final allBowl = (inn['bowlers'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      final bowlingNow = allBowl.where((bw) => (bw['bowling'] == true || bw['bowling'] == 'true')).toList();
+      _bowlers = bowlingNow.isNotEmpty ? bowlingNow : (allBowl.isNotEmpty ? [allBowl.last] : []);
+    }
+
     if (r['commentaries'] is List) {
-      _commentary = (r['commentaries'] as List).whereType<Map<String, dynamic>>().toList();
-    }
-
-    if (r['live_inning'] is Map) {
-      final inn = r['live_inning'] as Map;
-      if (inn['equations'] is Map) {
-        final eq = inn['equations'] as Map;
-        _crr = (eq['runrate'] ?? '-').toString();
-        _rrr = (eq['required_runrate'] ?? '-').toString();
-        _target = (eq['target'] ?? '-').toString();
-      }
-      if (inn['current_partnership'] is Map) {
-        final cp = inn['current_partnership'] as Map;
-        _pship = '${cp['runs'] ?? 0}(${cp['balls'] ?? 0})';
-      }
-      if (inn['last_wicket'] is Map) {
-        final lw = inn['last_wicket'] as Map;
-        _lastWkt = '${lw['name'] ?? ''} ${lw['runs'] ?? 0}(${lw['balls'] ?? 0})';
-      }
-      final rs = (inn['recent_scores'] ?? '').toString().trim();
-      if (rs.isNotEmpty) {
-        _recentBalls = rs.split(RegExp(r'[,|\s]+')).where((s) => s.isNotEmpty).take(10).toList();
-      }
-    }
-
-    if (r['live_odds'] is Map && r['live_odds']['matchodds'] is Map) {
-      final mo = r['live_odds']['matchodds'] as Map;
-      final ta = mo['teama'] is Map ? mo['teama'] as Map : null;
-      final tb = mo['teamb'] is Map ? mo['teamb'] as Map : null;
-      if (ta != null && (ta['back'] ?? '').toString().isNotEmpty) {
-        _oddsTeam = _m.teamA;
-        _oddsBack = (ta['back'] ?? '-').toString();
-        _oddsLay = (ta['lay'] ?? '-').toString();
-      } else if (tb != null && (tb['back'] ?? '').toString().isNotEmpty) {
-        _oddsTeam = _m.teamB;
-        _oddsBack = (tb['back'] ?? '-').toString();
-        _oddsLay = (tb['lay'] ?? '-').toString();
-      }
-    }
-
-    if (r['session_odds'] is List && (r['session_odds'] as List).isNotEmpty) {
-      final first = (r['session_odds'] as List).first;
-      if (first is Map) {
-        _sessionTitle = (first['title'] ?? 'Session').toString();
-        _sessionBack = (first['back'] ?? first['yes'] ?? '-').toString();
-        _sessionLay = (first['lay'] ?? first['no'] ?? '-').toString();
-      }
+      final list = (r['commentaries'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      _commentary = list.reversed.toList();
     }
   }
 
@@ -598,7 +627,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
               ),
             ),
             IconButton(
-              onPressed: _loading ? null : _loadLiveAndScorecard,
+              onPressed: _loading ? null : _loadAllDetails,
               icon: _loading
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
@@ -829,7 +858,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
 
   Widget _buildCommentaryTab() {
     if (_commentary.isEmpty) {
-      return const Center(child: Text('Commentary abhi available nahi hai.', style: TextStyle(color: Colors.grey)));
+      return Center(child: Text(_loading ? 'Loading commentary...' : 'Commentary abhi available nahi hai.', style: const TextStyle(color: Colors.grey)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(10),
@@ -838,6 +867,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
         final c = _commentary[i];
         final ov = c['over'] != null ? '${c['over']}.${c['ball'] ?? 0}: ' : '';
         final txt = (c['commentary'] ?? c['text'] ?? '').toString();
+        if (txt.isEmpty) return const SizedBox.shrink();
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.all(10),
@@ -850,7 +880,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
 
   Widget _buildScorecardTab() {
     if (_scorecardInnings.isEmpty) {
-      return const Center(child: Text('Scorecard abhi available nahi hai.', style: TextStyle(color: Colors.grey)));
+      return Center(child: Text(_loading ? 'Loading scorecard...' : 'Scorecard abhi available nahi hai.', style: const TextStyle(color: Colors.grey)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(10),
@@ -858,6 +888,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
       itemBuilder: (_, idx) {
         final inn = _scorecardInnings[idx];
         final name = (inn['name'] ?? 'Innings ${idx + 1}').toString();
+        final score = (inn['scores_full'] ?? '').toString();
         final batsmen = (inn['batsmen'] is List) ? List.from(inn['batsmen']) : <dynamic>[];
         final bowlers = (inn['bowlers'] is List) ? List.from(inn['bowlers']) : <dynamic>[];
 
@@ -868,17 +899,31 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF00897B))),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF00897B)))),
+                  Text(score, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                ],
+              ),
               const Divider(),
               ...batsmen.map((b) {
                 final m = b is Map ? b : {};
+                final how = (m['how_out'] ?? '').toString();
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: Text((m['name'] ?? '').toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
-                      Text('${m['runs'] ?? 0} (${m['balls_faced'] ?? 0}) • SR ${m['strike_rate'] ?? 0}', style: const TextStyle(fontSize: 12)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(child: Text((m['name'] ?? '').toString(), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                          Text('${m['runs'] ?? 0} (${m['balls_faced'] ?? 0}) • SR ${m['strike_rate'] ?? 0}', style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                      if (how.isNotEmpty)
+                        Text(how, style: const TextStyle(fontSize: 10, color: Colors.grey)),
                     ],
                   ),
                 );
@@ -894,7 +939,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(child: Text((m['name'] ?? '').toString(), style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
-                        Text('${m['overs'] ?? 0} O • ${m['runs_conceded'] ?? 0} R • ${m['wickets'] ?? 0} W', style: const TextStyle(fontSize: 12)),
+                        Text('${m['overs'] ?? 0} O • ${m['runs_conceded'] ?? 0} R • ${m['wickets'] ?? 0} W • ECO ${m['econ'] ?? 0}', style: const TextStyle(fontSize: 11)),
                       ],
                     ),
                   );
