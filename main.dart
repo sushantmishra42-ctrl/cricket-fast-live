@@ -204,10 +204,10 @@ class _HomeMatchesTabState extends State<HomeMatchesTab> {
   Future<List<RapidMatch>> _fetchByStatus(int status) async {
     final uri = Uri.https(kRapidApiHost, '/matches', {
       'status': '$status',
-      'per_paged': '30',
+      'per_paged': '10',
       'paged': '1',
     });
-    final res = await http.get(uri, headers: _apiHeaders).timeout(const Duration(seconds: 15));
+    final res = await http.get(uri, headers: _apiHeaders).timeout(const Duration(seconds: 40));
     if (res.statusCode != 200) {
       throw Exception('HTTP ${res.statusCode}');
     }
@@ -229,22 +229,28 @@ class _HomeMatchesTabState extends State<HomeMatchesTab> {
 
     try {
       final liveList = await _fetchByStatus(3);
-      final upList = await _fetchByStatus(1);
-      final doneList = await _fetchByStatus(2);
       if (!mounted) return;
       setState(() {
         _live = liveList;
-        _upcoming = upList;
-        _finished = doneList;
         _loading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _bannerMsg = 'Data load nahi hua ($e). Refresh dabayein.';
+        _bannerMsg = 'Live load issue ($e). Refresh dabayein.';
       });
     }
+
+    try {
+      final upList = await _fetchByStatus(1);
+      if (mounted) setState(() => _upcoming = upList);
+    } catch (_) {}
+
+    try {
+      final doneList = await _fetchByStatus(2);
+      if (mounted) setState(() => _finished = doneList);
+    } catch (_) {}
   }
 
   @override
@@ -290,8 +296,8 @@ class _HomeMatchesTabState extends State<HomeMatchesTab> {
             child: TabBarView(
               children: [
                 _buildList(_live, 'Abhi koi Live match nahi chal raha.'),
-                _buildList(_upcoming, 'Koi Upcoming match nahi mila.'),
-                _buildList(_finished, 'Koi Finished match nahi mila.'),
+                _buildList(_upcoming, 'Upcoming matches load ho rahe hain...'),
+                _buildList(_finished, 'Finished matches load ho rahe hain...'),
               ],
             ),
           ),
@@ -307,7 +313,7 @@ class _HomeMatchesTabState extends State<HomeMatchesTab> {
         child: ListView(
           children: [
             const SizedBox(height: 80),
-            Center(child: Text(_loading ? 'Loading matches...' : emptyText, style: const TextStyle(color: Colors.grey))),
+            Center(child: Text(_loading ? 'Matches load ho rahe hain (5-10 sec)...' : emptyText, style: const TextStyle(color: Colors.grey))),
           ],
         ),
       );
@@ -466,7 +472,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
     setState(() => _loading = true);
     try {
       final liveUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/live');
-      final liveRes = await http.get(liveUri, headers: _apiHeaders).timeout(const Duration(seconds: 15));
+      final liveRes = await http.get(liveUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
       if (liveRes.statusCode == 200) {
         final body = jsonDecode(liveRes.body);
         if (body is Map && body['response'] is Map) {
@@ -475,7 +481,7 @@ class _LiveMatchDetailPageState extends State<LiveMatchDetailPage> {
       }
 
       final scUri = Uri.https(kRapidApiHost, '/matches/${_m.matchId}/scorecard');
-      final scRes = await http.get(scUri, headers: _apiHeaders).timeout(const Duration(seconds: 15));
+      final scRes = await http.get(scUri, headers: _apiHeaders).timeout(const Duration(seconds: 30));
       if (scRes.statusCode == 200) {
         final body = jsonDecode(scRes.body);
         if (body is Map && body['response'] is Map) {
