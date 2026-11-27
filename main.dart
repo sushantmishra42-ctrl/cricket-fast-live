@@ -167,7 +167,8 @@ class _HomeScreenState extends State<_HomeScreen> {
   Widget build(BuildContext context) {
     final featured = [...widget.live, ...widget.up.take(4), ...widget.done.take(4)];
     final shown = _tab == 0 ? featured : widget.live;
-    final seriesName = widget.all.map((m) => m.comp).where((s) => s.isNotEmpty).firstOrNull ?? 'International & T20 Leagues';
+    final comps = widget.all.map((m) => m.comp).where((s) => s.isNotEmpty).toList();
+    final seriesName = comps.isNotEmpty ? comps.first : 'International & T20 Leagues';
     final news = [
       ('India dominate with strong total on Day 1', '2 hrs ago', const Color(0xFF1E3A8A)),
       ('IPL & T20 Leagues: Key player milestones', '6 hrs ago', const Color(0xFF065F46)),
@@ -352,7 +353,7 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
   Timer? _timer;
   late RapidMatch _m;
 
-  String _crr = '-', _rrr = '-', _remText = '-', _target = '-', _pship = '-', _lastWkt = '-', _toss = '-';
+  String _crr = '-', _remText = '-', _target = '-', _pship = '-', _lastWkt = '-', _toss = '-';
   String _backA = '-', _layA = '-', _backB = '-', _layB = '-', _backDraw = '-', _layDraw = '-';
   String _sessTitle = 'Session', _sessB = '-', _sessL = '-', _rxbR = '-', _rxbB = '-', _yetToBat = '';
   int _overNo = 1;
@@ -443,7 +444,6 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
       if (lastInn['equations'] is Map) {
         final eq = lastInn['equations'] as Map;
         if ((eq['runrate'] ?? '').toString().isNotEmpty) _crr = '${eq['runrate']}';
-        if ((eq['required_runrate'] ?? '').toString().isNotEmpty) _rrr = '${eq['required_runrate']}';
         if (maxInn >= 2 && (eq['target'] ?? '0').toString() != '0') _target = '${eq['target']}';
       }
       if (lastInn['current_partnership'] is Map) _pship = '${lastInn['current_partnership']['runs'] ?? 0}(${lastInn['current_partnership']['balls'] ?? 0})';
@@ -507,7 +507,13 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
           ],
           bottom: const TabBar(isScrollable: true, labelColor: Colors.black, unselectedLabelColor: Colors.grey, indicatorColor: Colors.black, labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13), tabs: [Tab(text: 'Info'), Tab(text: 'Live'), Tab(text: 'Commentary'), Tab(text: 'Scorecard'), Tab(text: 'History')]),
         ),
-        body: TabBarView(children: [_infoTab(), _liveTab(), _commTab(), _scorecardTab(), _historyTab()]),
+        body: TabBarView(children: [
+          _infoTab(),
+          Builder(builder: (tabCtx) => _liveTab(tabCtx)),
+          _commTab(),
+          _scorecardTab(),
+          _historyTab(),
+        ]),
       ),
     );
   }
@@ -525,7 +531,7 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
         _tile('Venue', _m.venue),
       ]);
 
-  Widget _liveTab() {
+  Widget _liveTab(BuildContext tabCtx) {
     final topScore = _m.scB != '-' ? '${_m.tB} ${_m.scB}' : '${_m.tA} ${_m.scA}';
     final innLabel = _m.scB != '-' ? '1st Innings - ${_m.tB}' : '1st Innings - ${_m.tA}';
     final isTest = _m.fmt.toUpperCase().contains('TEST') || _backDraw != '-';
@@ -569,11 +575,7 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
               ? Column(children: [
                   const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.info_outline, size: 15, color: Colors.grey), SizedBox(width: 5), Text('Win Probability', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500))]),
                   const SizedBox(height: 10),
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                    _probCol(_m.tA, _backA, _layA),
-                    _probCol(_m.tB, _backB, _layB),
-                    _probCol('DRAW', _backDraw, _layDraw),
-                  ]),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [_probCol(_m.tA, _backA, _layA), _probCol(_m.tB, _backB, _layB), _probCol('DRAW', _backDraw, _layDraw)]),
                 ])
               : Column(children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -608,4 +610,182 @@ class _MatchDetailPageState extends State<MatchDetailPage> {
         Container(
           margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.all(10), decoration: _card(8),
           child: Column(children: [
-            const Row(children: [Expanded(flex: 5, chi
+            const Row(children: [Expanded(flex: 5, child: Text('Bowler', style: TextStyle(color: Colors.grey, fontSize: 11))), Expanded(child: Text('O', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))), Expanded(child: Text('R', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))), Expanded(child: Text('W', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11))), Expanded(flex: 2, child: Text('Eco', textAlign: TextAlign.right, style: TextStyle(color: Colors.grey, fontSize: 11)))]),
+            const Divider(),
+            if (_bowlers.isEmpty)
+              const Row(children: [Expanded(flex: 5, child: Text('-')), Expanded(child: Text('0', textAlign: TextAlign.right)), Expanded(child: Text('0', textAlign: TextAlign.right)), Expanded(child: Text('0', textAlign: TextAlign.right)), Expanded(flex: 2, child: Text('0.0', textAlign: TextAlign.right))])
+            else
+              ..._bowlers.map((w) => Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(children: [Expanded(flex: 5, child: Text('${w['name'] ?? '-'}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12), overflow: TextOverflow.ellipsis)), Expanded(child: Text('${w['overs'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))), Expanded(child: Text('${w['runs_conceded'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12))), Expanded(child: Text('${w['wickets'] ?? 0}', textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))), Expanded(flex: 2, child: Text('${w['econ'] ?? '0.0'}', textAlign: TextAlign.right, style: const TextStyle(fontSize: 12)))]))),
+          ]),
+        ),
+        if (_yetToBat.isNotEmpty)
+          Container(margin: const EdgeInsets.fromLTRB(8, 8, 8, 0), padding: const EdgeInsets.all(10), decoration: _card(8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Yet to bat', style: TextStyle(color: Colors.grey, fontSize: 11)), const SizedBox(height: 4), Text(_yetToBat, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))])),
+        Container(
+          margin: const EdgeInsets.fromLTRB(8, 10, 8, 0), decoration: _card(10),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Padding(padding: EdgeInsets.fromLTRB(12, 10, 12, 4), child: Text('Settings', style: TextStyle(color: Colors.grey, fontSize: 12))),
+            const Divider(height: 1),
+            _setRow(Icons.emoji_events_outlined, 'Series', () => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_m.comp.isEmpty ? _m.title : _m.comp)))),
+            _setRow(Icons.bar_chart, 'Scorecard', () => DefaultTabController.of(tabCtx).animateTo(3)),
+            _setRow(Icons.share, 'Share Score', () { Clipboard.setData(ClipboardData(text: '${_m.shortTitle}: ${_m.tA} ${_m.scA} vs ${_m.tB} ${_m.scB}')); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Score copied!'))); }),
+            _setRow(Icons.translate, _voice ? 'Voice: ON' : 'Voice: OFF', () => setState(() => _voice = !_voice)),
+          ]),
+        ),
+        Container(
+          margin: const EdgeInsets.fromLTRB(8, 10, 8, 0), decoration: _card(10),
+          child: Column(children: [
+            ListTile(dense: true, leading: _logo(_m.scB != '-' ? _m.logoB : _m.logoA, _m.scB != '-' ? _m.tB : _m.tA, 24), title: Text(innLabel, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)), trailing: Icon(_innOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down), onTap: () => setState(() => _innOpen = !_innOpen)),
+            if (_innOpen) ..._allInnBat.map((b) => Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 6), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('${b['name'] ?? ''}', style: const TextStyle(fontSize: 12)), Text('${b['runs'] ?? 0} (${b['balls_faced'] ?? 0})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))]))),
+          ]),
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          child: Column(children: [
+            Icon(Icons.shield_outlined, color: Colors.grey, size: 28),
+            SizedBox(height: 6),
+            Text('Cricket Fast Live', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54)),
+            SizedBox(height: 4),
+            Text('Cricket Fast Live does not promote or support real money gaming. Live scores are for information & analysis only.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
+          ]),
+        ),
+      ],
+    );
+  }
+
+  Widget _probCol(String lbl, String b, String l) => Column(children: [Text(lbl, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)), const SizedBox(height: 6), Row(children: [_rate(b, true), const SizedBox(width: 4), _rate(l, false)])]);
+  Widget _setRow(IconData ic, String t, VoidCallback onTap) => ListTile(dense: true, leading: Icon(ic, size: 18), title: Text(t, style: const TextStyle(fontSize: 13)), trailing: const Icon(Icons.chevron_right, size: 18, color: Colors.grey), onTap: onTap);
+
+  Widget _commTab() => _comm.isEmpty
+      ? Center(child: Text(_loading ? 'Loading commentary...' : 'Commentary available nahi hai.', style: const TextStyle(color: Colors.grey)))
+      : ListView.builder(padding: const EdgeInsets.all(10), itemCount: _comm.length, itemBuilder: (_, i) { final c = _comm[i]; final txt = (c['commentary'] ?? c['text'] ?? '').toString(); return txt.isEmpty ? const SizedBox.shrink() : Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(10), decoration: _card(8), child: Text('${c['over'] ?? 0}.${c['ball'] ?? 0}  $txt', style: const TextStyle(fontSize: 13))); });
+
+  Widget _scorecardTab() => _innings.isEmpty
+      ? Center(child: Text(_loading ? 'Loading scorecard...' : 'Scorecard available nahi hai.', style: const TextStyle(color: Colors.grey)))
+      : ListView.builder(
+          padding: const EdgeInsets.all(10),
+          itemCount: _innings.length,
+          itemBuilder: (_, idx) {
+            final inn = _innings[idx], bs = (inn['batsmen'] is List) ? List.from(inn['batsmen']) : [], bw = (inn['bowlers'] is List) ? List.from(inn['bowlers']) : [];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10), decoration: _card(10),
+              child: ExpansionTile(
+                initiallyExpanded: idx == _innings.length - 1,
+                title: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${inn['name'] ?? 'Innings'}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))), Text('${inn['scores_full'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF00897B)))]),
+                childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                children: [
+                  ...bs.map((b) => Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${b['name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12))), Text('${b['runs'] ?? 0} (${b['balls_faced'] ?? 0}) • SR ${b['strike_rate'] ?? 0}', style: const TextStyle(fontSize: 12))]), if ((b['how_out'] ?? '').toString().isNotEmpty) Text('${b['how_out']}', style: const TextStyle(fontSize: 10, color: Color(0xFFB45309)))]))),
+                  if (bw.isNotEmpty) const Divider(),
+                  ...bw.map((w) => Padding(padding: const EdgeInsets.symmetric(vertical: 3), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text('${w['name'] ?? ''}', style: const TextStyle(fontSize: 12))), Text('${w['overs'] ?? 0} O • ${w['runs_conceded'] ?? 0} R • ${w['wickets'] ?? 0} W • ER ${w['econ'] ?? 0}', style: const TextStyle(fontSize: 11))]))),
+                ],
+              ),
+            );
+          },
+        );
+
+  Widget _historyTab() {
+    final bars = List.generate(10, (i) => (i + 1, (i * 3 + 4) % 14 + 2));
+    return ListView(padding: const EdgeInsets.all(12), children: [
+      Container(padding: const EdgeInsets.all(14), decoration: _card(), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Over by Over Runs Graph', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        const SizedBox(height: 16),
+        SizedBox(height: 140, child: Row(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.spaceAround, children: bars.map((b) => Column(mainAxisAlignment: MainAxisAlignment.end, children: [Text('${b.$2}', style: const TextStyle(fontSize: 10, color: Colors.grey)), const SizedBox(height: 4), Container(width: 16, height: (b.$2 * 7).toDouble(), decoration: BoxDecoration(color: const Color(0xFF8D7B68), borderRadius: BorderRadius.circular(3))), const SizedBox(height: 4), Text('${b.$1}', style: const TextStyle(fontSize: 10))])).toList())),
+      ])),
+    ]);
+  }
+
+  Widget _tile(String t, String v) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: _card(8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: const TextStyle(color: Colors.grey, fontSize: 11)), const SizedBox(height: 3), Text(v, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))]));
+  Widget _rate(String t, bool p) => Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3), decoration: BoxDecoration(color: p ? const Color(0xFFFDE8EC) : const Color(0xFFE0F5F2), borderRadius: BorderRadius.circular(4)), child: Text(t, style: TextStyle(color: p ? const Color(0xFFD81B60) : const Color(0xFF00897B), fontWeight: FontWeight.bold, fontSize: 12)));
+  Widget _ball(String l) {
+    Color bg = const Color(0xFFEFEFEF), fg = Colors.black;
+    if (l == '4') { bg = const Color(0xFF3E7CB1); fg = Colors.white; }
+    else if (l == '6') { bg = const Color(0xFF6B4FA2); fg = Colors.white; }
+    else if (l == '1' || l == '2' || l == '3') { bg = const Color(0xFF2E9F57); fg = Colors.white; }
+    else if (l.toUpperCase() == 'W') { bg = Colors.redAccent; fg = Colors.white; }
+    return Container(margin: const EdgeInsets.only(right: 4), width: 22, height: 22, alignment: Alignment.center, decoration: BoxDecoration(color: bg, shape: BoxShape.circle), child: Text(l, style: TextStyle(color: fg, fontWeight: FontWeight.bold, fontSize: 10)));
+  }
+}
+
+class _FixturesScreen extends StatefulWidget {
+  final List<RapidMatch> all;
+  const _FixturesScreen({required this.all});
+  @override
+  State<_FixturesScreen> createState() => _FixturesScreenState();
+}
+
+class _FixturesScreenState extends State<_FixturesScreen> {
+  String _fmt = 'All', _q = '';
+  @override
+  Widget build(BuildContext context) {
+    final list = widget.all.where((m) => (_fmt == 'All' || m.fmt.toUpperCase().contains(_fmt.toUpperCase())) && (_q.isEmpty || m.title.toLowerCase().contains(_q.toLowerCase()))).toList();
+    return SafeArea(
+      child: DefaultTabController(
+        length: 3,
+        child: Column(children: [
+          Container(color: Colors.white, child: const TabBar(labelColor: Colors.black, unselectedLabelColor: Colors.grey, indicatorColor: Colors.black, tabs: [Tab(text: 'Day wise'), Tab(text: 'Series wise'), Tab(text: 'Team wise')])),
+          Padding(padding: const EdgeInsets.all(8), child: Row(children: ['All', 'T20', 'ODI', 'Test'].map((f) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(f, style: const TextStyle(fontSize: 12)), selected: _fmt == f, onSelected: (_) => setState(() => _fmt = f)))).toList())),
+          Expanded(
+            child: TabBarView(children: [
+              ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                itemCount: list.length,
+                itemBuilder: (_, i) {
+                  final m = list[i];
+                  return GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MatchDetailPage(match: m, allMatches: widget.all))),
+                    child: Container(margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: _card(), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(m.comp.isEmpty ? m.title : m.comp, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.ellipsis)), Text(m.code == 3 ? 'Live' : (m.code == 2 ? 'Finished' : 'Upcoming'), style: TextStyle(fontSize: 11, color: m.code == 3 ? Colors.red : const Color(0xFF00897B), fontWeight: FontWeight.bold))]),
+                      const SizedBox(height: 8),
+                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('${m.tA}  ${m.scA}', style: const TextStyle(fontWeight: FontWeight.bold)), const Icon(Icons.bolt, size: 16, color: Colors.grey), Text('${m.scB}  ${m.tB}', style: const TextStyle(fontWeight: FontWeight.bold))]),
+                      if (m.note.isNotEmpty) ...[const SizedBox(height: 6), Text(m.note, style: const TextStyle(fontSize: 11, color: Color(0xFFB45309)))],
+                    ])),
+                  );
+                },
+              ),
+              _SeriesScreen(all: widget.all),
+              Column(children: [
+                Padding(padding: const EdgeInsets.all(10), child: TextField(decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: 'Search team', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none)), onChanged: (v) => setState(() => _q = v))),
+                Expanded(child: ListView(children: list.map((m) => ListTile(leading: _logo(m.logoA, m.tA, 28), title: Text(m.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MatchDetailPage(match: m, allMatches: widget.all))))).toList())),
+              ]),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _SeriesScreen extends StatelessWidget {
+  final List<RapidMatch> all;
+  const _SeriesScreen({required this.all});
+  @override
+  Widget build(BuildContext context) {
+    final names = all.map((m) => m.comp).where((s) => s.isNotEmpty).toSet().toList();
+    return SafeArea(child: ListView(padding: const EdgeInsets.all(12), children: [const Text('Trending & Ongoing Series', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 10), ...names.map((s) => Container(margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12), decoration: _card(), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Text(s, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))), const Text('Ongoing', style: TextStyle(color: Color(0xFFD81B60), fontSize: 11, fontWeight: FontWeight.bold))])))]));
+  }
+}
+
+class _FlicksScreen extends StatelessWidget {
+  const _FlicksScreen();
+  @override
+  Widget build(BuildContext context) => SafeArea(child: ListView(padding: const EdgeInsets.all(12), children: [
+        const Text('Match Insights & Videos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        Container(padding: const EdgeInsets.all(14), decoration: _card(), child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Match Predictions, Pitch Reports & Playing 11', style: TextStyle(fontWeight: FontWeight.bold)), SizedBox(height: 4), Text('Live T20, ODI & Test Match analysis', style: TextStyle(color: Colors.grey, fontSize: 12))])),
+      ]));
+}
+
+class _MoreScreen extends StatelessWidget {
+  final ValueChanged<int> onNav;
+  const _MoreScreen({required this.onNav});
+  @override
+  Widget build(BuildContext context) => SafeArea(child: ListView(padding: const EdgeInsets.all(12), children: [
+        const Text('More', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        Container(decoration: _card(), child: Column(children: [
+          ListTile(leading: const Icon(Icons.emoji_events_outlined), title: const Text('Browse Series'), trailing: const Icon(Icons.chevron_right), onTap: () => onNav(3)),
+          ListTile(leading: const Icon(Icons.sports_cricket), title: const Text('Browse Fixtures'), trailing: const Icon(Icons.chevron_right), onTap: () => onNav(2)),
+          const ListTile(leading: Icon(Icons.privacy_tip_outlined), title: Text('Privacy Policy'), trailing: Icon(Icons.chevron_right)),
+          const ListTile(leading: Icon(Icons.info_outline), title: Text('App Version'), trailing: Text('1.0')),
+        ])),
+      ]));
+}
